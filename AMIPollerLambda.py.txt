@@ -1,0 +1,48 @@
+from datetime import datetime
+import boto3, os, time, logging, json
+import time
+
+#logger = logging.getLogger()
+#logger.setLevel(logging.INFO);
+
+def lambda_handler(event, context):
+
+	client = boto3.client('ec2');
+	#,region_name='us-east-2'
+	response = client.describe_images(Owners=['182355008820'])
+	
+	print response
+	r = json.dumps(response)
+	loaded_r = json.loads(r)
+	print loaded_r['Images']
+
+	origAmiDate = ''
+	amiDate = ''
+	fmt = '%Y-%m-%d %H:%M:%S'
+	d2 = datetime.now()
+	d2_ts = time.mktime(d2.timetuple())
+	diffInMins = 0
+
+	snsclient = boto3.client('sns');
+	
+	for i in loaded_r['Images']:
+		print json.dumps(i)
+		print i['ImageId'], i['CreationDate'], i['Name']
+		diffInMins = 0
+		origAmiDate = i['CreationDate']
+		amiDate = origAmiDate.split(".")[0]
+		d1 = datetime.strptime(amiDate, '%Y-%m-%dT%H:%M:%S')
+		d1_ts = time.mktime(d1.timetuple())
+		diffInMins = int(d2_ts-d1_ts) / 60
+		print diffInMins
+		
+		# Compare with polling frequency + 1
+		if diffInMins < 6:			
+			snsresponse = snsclient.publish(
+				Message=json.dumps(i),
+				TopicArn='arn:aws:sns:us-east-2:182355008820:NewAMINotifierTopic'
+			)
+			print ('SNS MESSAGE')
+			print snsresponse
+	
+	return 'Task Completed'

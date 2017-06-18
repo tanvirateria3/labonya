@@ -1,0 +1,82 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import boto3
+import os
+import time
+import logging
+import json
+
+
+def lambda_handler(event, context):
+    print event
+    snsMessage = event['Records'][0]['Sns']['Message']
+    message = json.loads(snsMessage)
+    amiName = message['Name']
+    amiId = message['ImageId']
+    amiCreateDate = message['CreationDate']
+
+# ....amiPlatform = message['Platform']
+# ....amiArchitecture = message['Architecture']
+
+    print amiName
+    print amiId
+    print amiCreateDate
+
+# ....print amiPlatform
+# ....print amiArchitecture
+
+    filters = [{'Name': 'tag:APPID', 'Values': ['ABCD']},
+               {'Name': 'instance-state-name', 'Values': ['running']}]
+
+    client = boto3.client('ec2')
+    clientCF = boto3.client('cloudformation')
+    response = client.describe_instances(Filters=filters)
+    NewStackName = ''
+    print response
+
+# ....r = json.dumps(response)
+# ....loaded_r = json.loads(r)
+
+    print response['Reservations']
+    for r in response['Reservations']:
+        for i in r['Instances']:
+            print i['InstanceId'], i['ImageId'], i['InstanceType']
+            ImageId = i['ImageId']
+            SubnetId = 'subnet-d36419ba'
+            InstanceType = i['InstanceType']
+            InstanceId = i['InstanceId']
+
+            # NewStackName='VZ-NTS-NEWAMI-STACK'+amiId+InstanceId....
+
+            if amiId != ImageId:
+                print 'NEW AMI received'
+                NewStackName = 'VZ-VES-NEWAMI-NEWSTACK' + amiId \
+                    + InstanceId
+                print NewStackName
+                responseCF = \
+                    clientCF.create_stack(StackName=NewStackName,
+                        TemplateURL='https://s3.us-east-2.amazonaws.com/ec2tempaltebucket/labonya.txt'
+                        , Parameters=[{'ParameterKey': 'AmiId',
+                        'ParameterValue': amiId,
+                        'UsePreviousValue': False},
+                        {'ParameterKey': 'Subnet',
+                        'ParameterValue': SubnetId,
+                        'UsePreviousValue': True},
+                        {'ParameterKey': 'InstanceType',
+                        'ParameterValue': InstanceType,
+                        'UsePreviousValue': True},
+                        {'ParameterKey': 'Name',
+                        'ParameterValue': 'ABCD-2',
+                        'UsePreviousValue': False}])
+
+                responseTerm = \
+                    client.terminate_instances(InstanceIds=[InstanceId])
+
+                # print responseTerm
+
+    return 'Task Completed'
+
+
+
+			
